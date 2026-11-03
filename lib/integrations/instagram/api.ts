@@ -81,9 +81,10 @@ function parseAccounts(payload: MetaPayload) {
 }
 
 async function inspectToken(accessToken: string) {
-  const [meResult, permissionsResult] = await Promise.all([
+  const [meResult, permissionsResult, debugResult] = await Promise.all([
     request(`${graphUrl("me")}?fields=id,client_business_id&access_token=${encodeURIComponent(accessToken)}`).catch(() => ({})),
     request(`${graphUrl("me/permissions")}?access_token=${encodeURIComponent(accessToken)}`).catch(() => ({})),
+    debugToken(accessToken),
   ]);
   const me = meResult as MetaPayload;
   const permissions = permissionsResult as MetaPayload;
@@ -94,7 +95,32 @@ async function inspectToken(accessToken: string) {
     appScopedUserId: typeof me.id === "string" ? me.id : null,
     clientBusinessId: typeof me.client_business_id === "string" ? me.client_business_id : null,
     permissions: granted,
+    debug: debugResult,
   };
+}
+
+async function debugToken(accessToken: string) {
+  try {
+    const { appId, appSecret } = instagramConfig();
+    const appAccessToken = `${appId}|${appSecret}`;
+    const payload = await request(`${graphUrl("debug_token")}?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appAccessToken)}`);
+    const data = payload.data && typeof payload.data === "object" ? payload.data as MetaPayload : {};
+    const granularScopes = Array.isArray(data.granular_scopes)
+      ? data.granular_scopes.filter((item): item is MetaPayload => Boolean(item && typeof item === "object")).map((item) => ({
+        scope: typeof item.scope === "string" ? item.scope : null,
+        targetIds: Array.isArray(item.target_ids) ? item.target_ids.filter((id): id is string => typeof id === "string") : [],
+      }))
+      : [];
+    return {
+      appId: typeof data.app_id === "string" ? data.app_id : null,
+      isValid: data.is_valid === true,
+      tokenType: typeof data.type === "string" ? data.type : null,
+      scopes: Array.isArray(data.scopes) ? data.scopes.filter((scope): scope is string => typeof scope === "string") : [],
+      granularScopes,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function createContainer(input: { userId: string; accessToken: string; imageUrl: string; caption: string; mediaType: "FEED" | "STORIES" }) {
