@@ -14,6 +14,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (context.error) return context.error;
     const { generation, output, product, business, supabase } = context;
     if (!output) return jsonError("Draft output required before image generation", 409);
+    if (!product.imagePath) return jsonError("Product reference image required before image generation", 409);
     if (generation.imageStatus === "processing" && generation.imageJobId) return Response.json({ generationId: generation.id, imageStatus: generation.imageStatus, imageJobId: generation.imageJobId }, { status: 202 });
     if (generation.imageStatus === "succeeded" && output.imagePath) return Response.json({ generationId: generation.id, imageStatus: "succeeded", imagePath: output.imagePath, imageUrl: await signedUrl(supabase, output.imagePath) });
 
@@ -33,7 +34,9 @@ POSTER LAYOUT: ${String(brief.composition ?? "")}
 REQUIRED FACTUAL OVERLAY TEXT: ${String(brief.overlayText ?? "")}
 
 Use the uploaded product photo as the exact product reference: preserve its shape, carving, material, and recognizable details. Make the product the hero element, but build a complete advertisement around it: strong headline, clear visual hierarchy, promotional price area when provided, short benefit/CTA, branded decorative elements, and a clean footer. Use attractive Indonesian design inspired by Bali craftsmanship without inventing claims. Do not output an isolated studio product shot. Do not add phone numbers, social handles, prices, certifications, or claims unless supplied above. Keep text short, legible, correctly spelled, and inside the canvas. If exact text rendering is uncertain, prioritize the poster layout and leave clean space for typography rather than generating gibberish.`;
-    const job = await createXkiroImage(prompt, generation.format);
+    const { data: referenceImage, error: referenceError } = await supabase.storage.from("product-images").download(product.imagePath);
+    if (referenceError || !referenceImage) return jsonError("Could not load product reference image", 502);
+    const job = await createXkiroImage(prompt, generation.format, referenceImage);
     await getDb().update(contentGenerations).set({ imageStatus: job.status, imageJobId: job.id, imageError: null }).where(eq(contentGenerations.id, generation.id));
     await getDb().update(conversations).set({ state: "generating", updatedAt: new Date() }).where(eq(conversations.id, generation.conversationId));
     // Keep job creation asynchronous. CDN download and Storage upload belong to GET polling.
@@ -57,8 +60,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const job = await pollXkiroImage(generation.imageJobId);
     if (job.status === "failed") {
-      await getDb().update(contentGenerations).set({ imageStatus: "failed", imageError: "Xkiro image job failed", completedAt: new Date() }).where(eq(contentGenerations.id, generation.id));
-      return Response.json({ generationId: generation.id, imageStatus: "failed", error: "Xkiro image job failed" }, { status: 502 });
+      const error = job.error || "Xkiro image job failed";
+      await getDb().update(contentGenerations).set({ imageStatus: "failed", imageError: error, completedAt: new Date() }).where(eq(contentGenerations.id, generation.id));
+      return Response.json({ generationId: generation.id, imageStatus: "failed", error }, { status: 502 });
     }
     if (job.status === "succeeded" && output) {
       try {
@@ -89,7 +93,7 @@ async function authorizedGeneration({ id }: { id: string }) {
   const [generation] = await db.select().from(contentGenerations).where(and(eq(contentGenerations.id, id), eq(contentGenerations.businessId, business.id))).limit(1);
   if (!generation) return { error: jsonError("Generation not found", 404) };
   const [output] = await db.select().from(contentOutputs).where(eq(contentOutputs.generationId, id)).limit(1);
-   const [product] = await db.select({ name: products.name, description: products.description, materials: products.materials, price: products.price }).from(products).where(eq(products.id, generation.productId)).limit(1);
+    const [product] = await db.select({ name: products.name, description: products.description, materials: products.materials, price: products.price, imagePath: products.imagePath }).from(products).where(eq(products.id, generation.productId)).limit(1);
   if (!product) return { error: jsonError("Product not found", 404) };
   return { generation, output, product, business, supabase, userId: user.id };
 }
