@@ -30,15 +30,21 @@ export async function assignedAccounts(accessToken: string) {
     const me = await request(`${graphUrl("me")}?fields=id,client_business_id&access_token=${encodeURIComponent(accessToken)}`);
     businessId = typeof me.client_business_id === "string" ? me.client_business_id : null;
     if (businessId) {
-      for (const edge of ["instagram_accounts", "owned_instagram_accounts", "client_instagram_accounts"]) {
+      for (const edge of ["owned_instagram_assets", "client_instagram_assets", "instagram_accounts", "owned_instagram_accounts", "client_instagram_accounts"]) {
         const result = await probe(`${businessId}/${edge}`, accessToken);
         businessEdges[edge] = result.summary;
         const edgeAccounts = result.payload ? parseAccounts(result.payload) : [];
-        if (edge === "instagram_accounts" && edgeAccounts.length) return edgeAccounts;
+        if (edgeAccounts.length) return edgeAccounts;
       }
     }
   }
+  const configured = await resolveConfiguredAccount(accessToken);
+  if (configured) return [configured];
   if (!accounts.length) {
+    const configuredAccountId = instagramConfig().accountId;
+    const configuredAccountCheck = configuredAccountId
+      ? await probeNode(configuredAccountId, accessToken)
+      : null;
     const diagnostics = await inspectToken(accessToken);
     const summary = {
       responseKeys: Object.keys(payload),
@@ -50,11 +56,39 @@ export async function assignedAccounts(accessToken: string) {
       } : null,
       businessId,
       businessEdges,
+      configuredAccountId,
+      configuredAccountCheck,
       token: diagnostics,
     };
     throw new XkiroError(`No Instagram Professional account was shared with KriyaMantra (${JSON.stringify(summary)})`, "invalid_response");
   }
   return accounts;
+}
+
+async function resolveConfiguredAccount(accessToken: string) {
+  const { accountId } = instagramConfig();
+  if (!accountId) return null;
+  const payload = await request(`${graphUrl(accountId)}?fields=id,username&access_token=${encodeURIComponent(accessToken)}`).catch(() => null);
+  const accounts = payload ? parseAccounts({ data: [payload] }) : [];
+  return accounts[0] ?? null;
+}
+
+async function probeNode(id: string, accessToken: string) {
+  const response = await fetch(`${graphUrl(id)}?fields=id,username,account_type&access_token=${encodeURIComponent(accessToken)}`, { cache: "no-store" });
+  const payload = await response.json().catch(() => null) as MetaPayload | null;
+  const error = payload?.error && typeof payload.error === "object" ? payload.error as MetaPayload : null;
+  return {
+    httpStatus: response.status,
+    id: typeof payload?.id === "string" ? payload.id : null,
+    username: typeof payload?.username === "string" ? payload.username : null,
+    accountType: typeof payload?.account_type === "string" ? payload.account_type : null,
+    metaError: error ? {
+      code: error.code ?? null,
+      subcode: error.error_subcode ?? null,
+      type: error.type ?? null,
+      message: error.message ?? null,
+    } : null,
+  };
 }
 
 async function probe(path: string, accessToken: string) {
