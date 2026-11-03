@@ -24,7 +24,18 @@ export async function exchangeCode(code: string) {
 export async function assignedAccounts(accessToken: string) {
   const payload = await request(`${graphUrl("me/assigned_instagram_accounts")}?fields=id,username&access_token=${encodeURIComponent(accessToken)}`);
   const accounts = Array.isArray(payload.data) ? payload.data.filter((item): item is { id: string; username: string } => Boolean(item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).username === "string")) : [];
-  if (!accounts.length) throw new XkiroError("No Instagram Professional account was shared with KriyaMantra", "invalid_response");
+  if (!accounts.length) {
+    const summary = {
+      responseKeys: Object.keys(payload),
+      dataCount: Array.isArray(payload.data) ? payload.data.length : null,
+      metaError: payload.error && typeof payload.error === "object" ? {
+        code: (payload.error as Record<string, unknown>).code ?? null,
+        type: (payload.error as Record<string, unknown>).type ?? null,
+        message: (payload.error as Record<string, unknown>).message ?? null,
+      } : null,
+    };
+    throw new XkiroError(`No Instagram Professional account was shared with KriyaMantra (${JSON.stringify(summary)})`, "invalid_response");
+  }
   return accounts;
 }
 
