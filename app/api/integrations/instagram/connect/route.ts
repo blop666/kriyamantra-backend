@@ -19,7 +19,7 @@ export async function GET() {
     const state = randomBytes(32).toString("base64url");
     const now = new Date();
     await getDb().insert(instagramOauthStates).values({ id: randomUUID(), businessId: business.id, stateHash: hash(state), expiresAt: new Date(now.getTime() + 10 * 60_000), createdAt: now });
-    const params = new URLSearchParams({ client_id: config.appId, config_id: config.configurationId, redirect_uri: config.redirectUri, response_type: "code", display: "popup", prompt: "login", state });
+    const params = new URLSearchParams({ client_id: config.appId, config_id: config.configurationId, redirect_uri: config.redirectUri, response_type: "code", override_default_response_type: "true", display: "popup", prompt: "login", state });
     return Response.json({ authorizationUrl: `https://www.facebook.com/dialog/oauth?${params}` });
   } catch (error) {
     console.error("Instagram connect initialization failed", error);
