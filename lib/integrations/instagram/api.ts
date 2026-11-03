@@ -25,6 +25,7 @@ export async function assignedAccounts(accessToken: string) {
   const payload = await request(`${graphUrl("me/assigned_instagram_accounts")}?fields=id,username&access_token=${encodeURIComponent(accessToken)}`);
   const accounts = Array.isArray(payload.data) ? payload.data.filter((item): item is { id: string; username: string } => Boolean(item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).username === "string")) : [];
   if (!accounts.length) {
+    const diagnostics = await inspectToken(accessToken);
     const summary = {
       responseKeys: Object.keys(payload),
       dataCount: Array.isArray(payload.data) ? payload.data.length : null,
@@ -33,10 +34,26 @@ export async function assignedAccounts(accessToken: string) {
         type: (payload.error as Record<string, unknown>).type ?? null,
         message: (payload.error as Record<string, unknown>).message ?? null,
       } : null,
+      token: diagnostics,
     };
     throw new XkiroError(`No Instagram Professional account was shared with KriyaMantra (${JSON.stringify(summary)})`, "invalid_response");
   }
   return accounts;
+}
+
+async function inspectToken(accessToken: string) {
+  const [me, permissions] = await Promise.all([
+    request(`${graphUrl("me")}?fields=id,client_business_id&access_token=${encodeURIComponent(accessToken)}`).catch(() => ({})),
+    request(`${graphUrl("me/permissions")}?access_token=${encodeURIComponent(accessToken)}`).catch(() => ({})),
+  ]);
+  const granted = Array.isArray(permissions.data)
+    ? permissions.data.filter((item): item is { permission: string; status: string } => Boolean(item && typeof item === "object" && typeof (item as Record<string, unknown>).permission === "string" && typeof (item as Record<string, unknown>).status === "string")).map((item) => `${item.permission}:${item.status}`)
+    : [];
+  return {
+    appScopedUserId: typeof me.id === "string" ? me.id : null,
+    clientBusinessId: typeof me.client_business_id === "string" ? me.client_business_id : null,
+    permissions: granted,
+  };
 }
 
 export async function createContainer(input: { userId: string; accessToken: string; imageUrl: string; caption: string; mediaType: "FEED" | "STORIES" }) {
