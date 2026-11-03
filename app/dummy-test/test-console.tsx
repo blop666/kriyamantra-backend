@@ -25,6 +25,7 @@ export default function DummyTestConsole() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [generation, setGeneration] = useState<Record<string, unknown> | null>(null);
   const [imageUrl, setImageUrl] = useState("");
+  const [imageStatus, setImageStatus] = useState("");
   const [busy, setBusy] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState("");
@@ -114,7 +115,8 @@ export default function DummyTestConsole() {
     await run("image", async () => {
       if (!generationId) throw new Error("Generation ID belum tersedia.");
       const result = await call(`/api/content-generations/${generationId}/image`, { method: "POST" });
-      const body = result.body as { imageUrl?: string };
+      const body = result.body as { imageStatus?: string; imageUrl?: string };
+      setImageStatus(body.imageStatus ?? "unknown");
       if (body.imageUrl) setImageUrl(body.imageUrl);
     });
   }
@@ -123,7 +125,8 @@ export default function DummyTestConsole() {
     await run("poll", async () => {
       if (!generationId) throw new Error("Generation ID belum tersedia.");
       const result = await call(`/api/content-generations/${generationId}/image`);
-      const body = result.body as { imageUrl?: string };
+      const body = result.body as { imageStatus?: string; imageUrl?: string };
+      setImageStatus(body.imageStatus ?? "unknown");
       if (body.imageUrl) setImageUrl(body.imageUrl);
     });
   }
@@ -133,10 +136,12 @@ export default function DummyTestConsole() {
       if (!generationId) throw new Error("Generation ID belum tersedia.");
       const started = await call(`/api/content-generations/${generationId}/image`, { method: "POST" });
       let body = started.body as { imageStatus?: string; imageUrl?: string };
-      for (let attempt = 0; attempt < 12 && body.imageStatus !== "succeeded" && body.imageStatus !== "failed"; attempt += 1) {
+      setImageStatus(body.imageStatus ?? "unknown");
+      for (let attempt = 0; attempt < 24 && body.imageStatus !== "succeeded" && body.imageStatus !== "failed"; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
         const result = await call(`/api/content-generations/${generationId}/image`);
         body = result.body as { imageStatus?: string; imageUrl?: string };
+        setImageStatus(body.imageStatus ?? "unknown");
       }
       if (body.imageUrl) setImageUrl(body.imageUrl);
       if (body.imageStatus !== "succeeded") throw new Error(`Image belum selesai setelah polling. Status: ${body.imageStatus ?? "unknown"}. Klik Poll image untuk lanjut.`);
@@ -176,7 +181,8 @@ export default function DummyTestConsole() {
           <Section number="04" title="Draft output & image" className="lg:col-span-2">
             {generation ? <pre className="max-h-72 overflow-auto rounded-xl bg-[#09201d] p-4 text-xs leading-6 text-[#d8e8d8]">{JSON.stringify(generation, null, 2)}</pre> : <Empty text="Copy generation output muncul di sini." />}
             <div className="mt-4 flex flex-wrap gap-2"><Button onClick={generateImageUntilDone} disabled={!!busy || !generationId}>Generate image + wait</Button><Button onClick={startImage} disabled={!!busy || !generationId} secondary>Start job</Button><Button onClick={pollImage} disabled={!!busy || !generationId} secondary>Poll image</Button></div>
-            {imageUrl && <div className="mt-5 overflow-hidden rounded-2xl border border-white/15 bg-[#09201d]"><img src={imageUrl} alt="Generated draft" className="max-h-[32rem] w-full object-contain" /><div className="break-all p-3 text-xs text-[#c8d6c9]">Signed URL: {imageUrl}</div></div>}
+             {imageStatus && <p className="mt-4 text-xs text-[#f4d895]">Image status: {imageStatus}. Jika masih processing, klik Poll image lagi setelah beberapa detik.</p>}
+             {imageUrl && <div className="mt-5 overflow-hidden rounded-2xl border border-white/15 bg-[#09201d]"><img src={imageUrl} alt="Generated draft" className="max-h-[32rem] w-full object-contain" /><div className="break-all p-3 text-xs text-[#c8d6c9]">Signed URL: {imageUrl}</div></div>}
             <IdLine label="Generation ID" value={generationId} />
           </Section>
 

@@ -12,10 +12,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   try {
     const context = await authorizedGeneration(await params);
     if (context.error) return context.error;
-    const { generation, output, product, business } = context;
+    const { generation, output, product, business, supabase } = context;
     if (!output) return jsonError("Draft output required before image generation", 409);
     if (generation.imageStatus === "processing" && generation.imageJobId) return Response.json({ generationId: generation.id, imageStatus: generation.imageStatus, imageJobId: generation.imageJobId }, { status: 202 });
-    if (generation.imageStatus === "succeeded" && output.imagePath) return Response.json({ generationId: generation.id, imageStatus: "succeeded", imagePath: output.imagePath });
+    if (generation.imageStatus === "succeeded" && output.imagePath) return Response.json({ generationId: generation.id, imageStatus: "succeeded", imagePath: output.imagePath, imageUrl: await signedUrl(supabase, output.imagePath) });
 
     const brief = output.creativeBrief as Record<string, unknown>;
     const prompt = `Design a polished Indonesian MARKETING POSTER for social media, not a plain product photograph and not a lifestyle photo.
