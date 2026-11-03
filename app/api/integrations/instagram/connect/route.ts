@@ -19,8 +19,10 @@ export async function GET() {
     const state = randomBytes(32).toString("base64url");
     const now = new Date();
     await getDb().insert(instagramOauthStates).values({ id: randomUUID(), businessId: business.id, stateHash: hash(state), expiresAt: new Date(now.getTime() + 10 * 60_000), createdAt: now });
-    const params = new URLSearchParams({ client_id: config.appId, config_id: config.configurationId, redirect_uri: config.redirectUri, response_type: "code", override_default_response_type: "true", display: "popup", prompt: "login", state });
-    return Response.json({ authorizationUrl: `https://www.facebook.com/dialog/oauth?${params}` });
+    const params = config.instagramLogin
+      ? new URLSearchParams({ client_id: config.appId, redirect_uri: config.redirectUri, response_type: "code", scope: "instagram_business_basic,instagram_business_content_publish", force_reauth: "true", state })
+      : new URLSearchParams({ client_id: config.appId, config_id: config.configurationId ?? "", redirect_uri: config.redirectUri, response_type: "code", override_default_response_type: "true", display: "popup", prompt: "login", state });
+    return Response.json({ authorizationUrl: `${config.instagramLogin ? "https://www.instagram.com/oauth/authorize" : "https://www.facebook.com/dialog/oauth"}?${params}` });
   } catch (error) {
     console.error("Instagram connect initialization failed", error);
     if (error instanceof XkiroError) return jsonError(error.message, 500, { code: error.code });

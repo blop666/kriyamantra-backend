@@ -15,10 +15,33 @@ async function request(url: string, init: RequestInit = {}) {
 
 export async function exchangeCode(code: string) {
   const config = instagramConfig();
+  if (config.instagramLogin) return exchangeInstagramLoginCode(code, config);
   const params = new URLSearchParams({ client_id: config.appId, client_secret: config.appSecret, code, redirect_uri: config.redirectUri });
   const payload = await request(`${graphUrl("oauth/access_token")}?${params}`);
   if (typeof payload.access_token !== "string") throw new XkiroError("Meta did not return an access token", "invalid_response");
   return { accessToken: payload.access_token, expiresIn: Number(payload.expires_in) || 5_184_000 };
+}
+
+async function exchangeInstagramLoginCode(code: string, config: ReturnType<typeof instagramConfig>) {
+  const shortTokenResponse = await fetch("https://api.instagram.com/oauth/access_token", {
+    method: "POST",
+    body: new URLSearchParams({ client_id: config.appId, client_secret: config.appSecret, grant_type: "authorization_code", redirect_uri: config.redirectUri, code }),
+    cache: "no-store",
+  });
+  const shortPayload = await shortTokenResponse.json().catch(() => null) as MetaPayload | null;
+  const shortData = shortPayload?.data && typeof shortPayload.data === "object" ? shortPayload.data as MetaPayload : shortPayload ?? {};
+  if (!shortTokenResponse.ok || typeof shortData.access_token !== "string") throw new XkiroError("Instagram did not return an access token", "invalid_response", shortTokenResponse.status);
+  const params = new URLSearchParams({ grant_type: "ig_exchange_token", client_secret: config.appSecret, access_token: shortData.access_token });
+  const longPayload = await request(`https://graph.instagram.com/access_token?${params}`);
+  if (typeof longPayload.access_token !== "string") throw new XkiroError("Instagram did not return a long-lived access token", "invalid_response");
+  return { accessToken: longPayload.access_token, expiresIn: Number(longPayload.expires_in) || 5_184_000, userId: typeof shortData.user_id === "string" ? shortData.user_id : null, scopes: typeof shortData.permissions === "string" ? shortData.permissions.split(",").filter(Boolean) : ["instagram_business_basic", "instagram_business_content_publish"] };
+}
+
+export async function instagramLoginAccount(accessToken: string) {
+  const payload = await request(`${graphUrl("me")}?fields=user_id,username,account_type&access_token=${encodeURIComponent(accessToken)}`);
+  const userId = typeof payload.user_id === "string" ? payload.user_id : typeof payload.id === "string" ? payload.id : null;
+  if (!userId || typeof payload.username !== "string") throw new XkiroError("Instagram did not return the professional account", "invalid_response");
+  return { id: userId, username: payload.username, accountType: typeof payload.account_type === "string" ? payload.account_type : "professional" };
 }
 
 export async function assignedAccounts(accessToken: string) {

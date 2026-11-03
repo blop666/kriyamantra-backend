@@ -4,7 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDb } from "@/lib/db/client";
 import { instagramConnections, instagramOauthStates } from "@/lib/db/schema";
 import { hash, encrypt } from "@/lib/integrations/instagram/crypto";
-import { assignedAccounts, exchangeCode } from "@/lib/integrations/instagram/api";
+import { assignedAccounts, exchangeCode, instagramLoginAccount } from "@/lib/integrations/instagram/api";
+import { instagramConfig } from "@/lib/integrations/instagram/config";
 import { jsonError } from "@/lib/http";
 
 export async function GET(request: Request) {
@@ -25,10 +26,14 @@ export async function GET(request: Request) {
     if (!business) return jsonError("Business profile not found", 404);
     await db.update(instagramOauthStates).set({ consumedAt: new Date() }).where(eq(instagramOauthStates.id, oauthState.id));
     const token = await exchangeCode(code);
-    const [account] = await assignedAccounts(token.accessToken);
+    const config = instagramConfig();
+    const account = config.instagramLogin ? await instagramLoginAccount(token.accessToken) : (await assignedAccounts(token.accessToken))[0];
+    if (!account) return jsonError("Instagram account was not returned by Meta", 502);
+    const accountType = config.instagramLogin ? (account as unknown as { accountType: string }).accountType : "professional";
+    const scopes = config.instagramLogin ? (token as { scopes: string[] }).scopes : ["instagram_basic", "instagram_content_publish"];
     const now = new Date();
     await db.delete(instagramConnections).where(eq(instagramConnections.businessId, oauthState.businessId));
-    await db.insert(instagramConnections).values({ id: randomUUID(), businessId: oauthState.businessId, instagramUserId: account.id, username: account.username, accountType: "professional", accessTokenEncrypted: encrypt(token.accessToken), tokenExpiresAt: new Date(now.getTime() + token.expiresIn * 1000), scopes: ["instagram_basic", "instagram_content_publish"], status: "active", connectedAt: now, updatedAt: now });
+    await db.insert(instagramConnections).values({ id: randomUUID(), businessId: oauthState.businessId, instagramUserId: account.id, username: account.username, accountType, accessTokenEncrypted: encrypt(token.accessToken), tokenExpiresAt: new Date(now.getTime() + token.expiresIn * 1000), scopes, status: "active", connectedAt: now, updatedAt: now });
     return Response.json({ connected: true, username: account.username, instagramUserId: account.id });
   } catch (error) {
     console.error("Instagram callback failed", error);
