@@ -6,6 +6,7 @@ import { hash } from "@/lib/integrations/instagram/crypto";
 import { instagramConfig } from "@/lib/integrations/instagram/config";
 import { jsonError } from "@/lib/http";
 import { randomUUID } from "node:crypto";
+import { XkiroError } from "@/lib/ai/xkiro/types";
 
 export async function GET() {
   try {
@@ -22,6 +23,7 @@ export async function GET() {
     return Response.json({ authorizationUrl: `https://www.facebook.com/dialog/oauth?${params}` });
   } catch (error) {
     console.error("Instagram connect initialization failed", error);
-    return jsonError("Could not start Instagram connection", 500);
+    if (error instanceof XkiroError) return jsonError(error.message, 500, { code: error.code });
+    return jsonError("Could not start Instagram connection", 500, { reason: error instanceof Error ? error.message : "Unknown server error" });
   }
 }

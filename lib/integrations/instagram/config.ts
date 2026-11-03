@@ -6,7 +6,10 @@ export function instagramConfig() {
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI?.trim();
   const configurationId = process.env.INSTAGRAM_CONFIGURATION_ID?.trim();
   const version = process.env.META_GRAPH_API_VERSION?.trim() || "v25.0";
-  if (!appId || !appSecret || !redirectUri || !configurationId) throw new XkiroError("Meta Instagram OAuth is not configured", "configuration");
+  if (!appId || !appSecret || !redirectUri || !configurationId) {
+    const missing = [!appId && "META_APP_ID", !appSecret && "META_APP_SECRET", !redirectUri && "INSTAGRAM_REDIRECT_URI", !configurationId && "INSTAGRAM_CONFIGURATION_ID"].filter(Boolean);
+    throw new XkiroError(`Meta Instagram OAuth is not configured; missing: ${missing.join(", ")}`, "configuration");
+  }
   return { appId, appSecret, redirectUri, configurationId, version };
 }
 
