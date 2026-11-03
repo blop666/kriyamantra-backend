@@ -4,8 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDb } from "@/lib/db/client";
 import { contentGenerations, contentOutputs, instagramConnections, instagramPublishJobs } from "@/lib/db/schema";
 import { jsonError, readJson } from "@/lib/http";
-import { createContainer, publishContainer, refresh } from "@/lib/integrations/instagram/api";
-import { decrypt, encrypt } from "@/lib/integrations/instagram/crypto";
+import { createContainer, publishContainer } from "@/lib/integrations/instagram/api";
+import { decrypt } from "@/lib/integrations/instagram/crypto";
 import { XkiroError } from "@/lib/ai/xkiro/types";
 
 type PublishInput = { mediaType: "FEED" | "STORIES"; caption?: string; confirmed: true };
@@ -29,14 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const [connection] = await db.select().from(instagramConnections).where(and(eq(instagramConnections.businessId, business.id), eq(instagramConnections.status, "active"))).limit(1);
     if (!connection) return jsonError("Connect an Instagram Professional account first", 409);
 
-    let accessToken = decrypt(connection.accessTokenEncrypted);
-    let expiresAt = connection.tokenExpiresAt;
-    if (expiresAt && expiresAt.getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000) {
-      const renewed = await refresh(accessToken);
-      accessToken = renewed.accessToken;
-      expiresAt = new Date(Date.now() + renewed.expiresIn * 1000);
-      await db.update(instagramConnections).set({ accessTokenEncrypted: encrypt(accessToken), tokenExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(instagramConnections.id, connection.id));
-    }
+    const accessToken = decrypt(connection.accessTokenEncrypted);
     const { data: signed } = await supabase.storage.from("generated-images").createSignedUrl(output.imagePath, 86_400);
     if (!signed?.signedUrl) return jsonError("Could not create publishable image URL", 502);
     const caption = input.caption?.trim() || output.captionId;

@@ -15,21 +15,17 @@ async function request(url: string, init: RequestInit = {}) {
 
 export async function exchangeCode(code: string) {
   const config = instagramConfig();
-  const body = new URLSearchParams({ client_id: config.appId, client_secret: config.appSecret, grant_type: "authorization_code", redirect_uri: config.redirectUri, code });
-  const short = await request("https://api.instagram.com/oauth/access_token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
-  const long = await request(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(config.appSecret)}&access_token=${encodeURIComponent(String(short.access_token))}`);
-  return { accessToken: String(long.access_token), expiresIn: Number(long.expires_in) || 5_184_000, userId: String(short.user_id ?? long.user_id) };
+  const params = new URLSearchParams({ client_id: config.appId, client_secret: config.appSecret, code, redirect_uri: config.redirectUri });
+  const payload = await request(`${graphUrl("oauth/access_token")}?${params}`);
+  if (typeof payload.access_token !== "string") throw new XkiroError("Meta did not return an access token", "invalid_response");
+  return { accessToken: payload.access_token, expiresIn: Number(payload.expires_in) || 5_184_000 };
 }
 
-export async function profile(accessToken: string) {
-  const payload = await request(`${graphUrl("me")}?fields=user_id,username,name&access_token=${encodeURIComponent(accessToken)}`);
-  if (typeof payload.user_id !== "string" || typeof payload.username !== "string") throw new XkiroError("Instagram account profile is incomplete", "invalid_response");
-  return { id: payload.user_id, username: payload.username, accountType: "professional" };
-}
-
-export async function refresh(accessToken: string) {
-  const payload = await request(`${graphUrl("refresh_access_token")}?grant_type=ig_refresh_token&access_token=${encodeURIComponent(accessToken)}`);
-  return { accessToken: String(payload.access_token), expiresIn: Number(payload.expires_in) || 5_184_000 };
+export async function assignedAccounts(accessToken: string) {
+  const payload = await request(`${graphUrl("me/assigned_instagram_accounts")}?fields=id,username&access_token=${encodeURIComponent(accessToken)}`);
+  const accounts = Array.isArray(payload.data) ? payload.data.filter((item): item is { id: string; username: string } => Boolean(item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).username === "string")) : [];
+  if (!accounts.length) throw new XkiroError("No Instagram Professional account was shared with KriyaMantra", "invalid_response");
+  return accounts;
 }
 
 export async function createContainer(input: { userId: string; accessToken: string; imageUrl: string; caption: string; mediaType: "FEED" | "STORIES" }) {
