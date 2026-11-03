@@ -42,10 +42,12 @@ export async function assignedAccounts(accessToken: string) {
 }
 
 async function inspectToken(accessToken: string) {
-  const [me, permissions] = await Promise.all([
+  const [meResult, permissionsResult] = await Promise.all([
     request(`${graphUrl("me")}?fields=id,client_business_id&access_token=${encodeURIComponent(accessToken)}`).catch(() => ({})),
     request(`${graphUrl("me/permissions")}?access_token=${encodeURIComponent(accessToken)}`).catch(() => ({})),
   ]);
+  const me = meResult as MetaPayload;
+  const permissions = permissionsResult as MetaPayload;
   const granted = Array.isArray(permissions.data)
     ? permissions.data.filter((item): item is { permission: string; status: string } => Boolean(item && typeof item === "object" && typeof (item as Record<string, unknown>).permission === "string" && typeof (item as Record<string, unknown>).status === "string")).map((item) => `${item.permission}:${item.status}`)
     : [];
