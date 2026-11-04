@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "instagram_publish_jobs_generation_media_type_unique" ON "instagram_publish_jobs" USING btree ("generation_id","media_type");

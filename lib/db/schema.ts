@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const conversationChannel = pgEnum("conversation_channel", ["web", "whatsapp"]);
 export const conversationState = pgEnum("conversation_state", ["collect_context", "ask_missing_data", "confirm_generation", "generating", "review_output", "revision", "approved"]);
@@ -115,4 +115,6 @@ export const instagramPublishJobs = pgTable("instagram_publish_jobs", {
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }).notNull(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  generationMediaTypeUnique: uniqueIndex("instagram_publish_jobs_generation_media_type_unique").on(table.generationId, table.mediaType),
+}));
