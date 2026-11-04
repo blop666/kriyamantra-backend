@@ -24,7 +24,7 @@ export type XkiroChatResult = {
 export class XkiroError extends Error {
   constructor(
     message: string,
-    readonly code: "configuration" | "timeout" | "provider" | "invalid_response",
+    readonly code: "configuration" | "timeout" | "provider" | "provider_auth" | "invalid_response",
     readonly status?: number,
   ) {
     super(message);

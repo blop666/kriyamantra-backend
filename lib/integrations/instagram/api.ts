@@ -8,7 +8,8 @@ async function request(url: string, init: RequestInit = {}) {
   const payload = await response.json().catch(() => null) as MetaPayload | null;
   if (!response.ok) {
     const error = payload?.error as MetaPayload | undefined;
-    throw new XkiroError(typeof error?.message === "string" ? `Instagram: ${error.message}` : "Instagram API request failed", "provider", response.status);
+    const code = error?.code === 190 || error?.error_subcode === 463 || error?.error_subcode === 467 ? "provider_auth" : "provider";
+    throw new XkiroError(code === "provider_auth" ? "Instagram authorization is no longer valid" : typeof error?.message === "string" ? `Instagram: ${error.message}` : "Instagram API request failed", code, response.status);
   }
   return payload ?? {};
 }

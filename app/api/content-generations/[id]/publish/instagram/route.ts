@@ -14,6 +14,7 @@ type PublishInput = { mediaType: "FEED" | "STORIES"; caption?: string; confirmed
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   let jobId: string | undefined;
+  let connectionId: string | undefined;
   const id = requestId(request);
   try {
     const input = await parseInput(await readJson(request));
@@ -36,6 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (existingJob && !input.retry) return withRequestId(jsonError("Previous Instagram publish failed; retry explicitly with retry=true", 409, { jobId: existingJob.id }, id), id);
     const [connection] = await db.select().from(instagramConnections).where(and(eq(instagramConnections.businessId, business.id), eq(instagramConnections.status, "active"))).limit(1);
     if (!connection) return withRequestId(jsonError("Connect an Instagram Professional account first", 409, undefined, id), id);
+    connectionId = connection.id;
 
     const accessToken = decrypt(connection.accessTokenEncrypted);
     const { data: signed } = await supabase.storage.from("generated-images").createSignedUrl(output.imagePath, 86_400);
@@ -62,7 +64,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const businessId = await getBusinessId().catch(() => null);
       if (businessId) await recordAudit({ businessId, action: "instagram.publish.failed", entityType: "instagram_publish_job", entityId: jobId, requestId: id, metadata: { providerStatus: error instanceof XkiroError ? error.status ?? null : null } }).catch(() => undefined);
     }
-    if (error instanceof XkiroError) return withRequestId(jsonError(error.message, error.code === "configuration" ? 500 : 502, { providerStatus: error.status ?? null }, id), id);
+    if (error instanceof XkiroError) {
+      if (error.code === "provider_auth" && connectionId) {
+        await getDb().update(instagramConnections).set({ status: "revoked", updatedAt: new Date() }).where(eq(instagramConnections.id, connectionId));
+        const businessId = await getBusinessId().catch(() => null);
+        if (businessId) await recordAudit({ businessId, action: "instagram.connection.revoked", entityType: "instagram_connection", entityId: connectionId, requestId: id, metadata: { reason: "provider_auth" } }).catch(() => undefined);
+      }
+      return withRequestId(jsonError(error.code === "provider_auth" ? "Instagram connection requires reconnect" : error.message, error.code === "configuration" ? 500 : 502, { providerStatus: error.status ?? null, reconnectRequired: error.code === "provider_auth" }, id), id);
+    }
     console.error("Instagram publish failed", error);
     return withRequestId(jsonError("Could not publish to Instagram", 502, undefined, id), id);
   }

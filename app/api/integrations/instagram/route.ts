@@ -6,14 +6,21 @@ import { jsonError } from "@/lib/http";
 import { recordAudit } from "@/lib/audit";
 import { requestId, withRequestId } from "@/lib/http";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const id = requestId(request);
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return jsonError("Authentication required", 401);
+  if (!user) return withRequestId(jsonError("Authentication required", 401, undefined, id), id);
   const { data: business } = await supabase.from("businesses").select("id").eq("owner_id", user.id).maybeSingle();
-  if (!business) return jsonError("Business profile required", 400);
+  if (!business) return withRequestId(jsonError("Business profile required", 400, undefined, id), id);
   const [connection] = await getDb().select({ id: instagramConnections.id, username: instagramConnections.username, accountType: instagramConnections.accountType, status: instagramConnections.status, tokenExpiresAt: instagramConnections.tokenExpiresAt }).from(instagramConnections).where(eq(instagramConnections.businessId, business.id)).limit(1);
-  return Response.json({ connection: connection ?? null });
+  if (!connection) return withRequestId(Response.json({ connection: null }), id);
+  const expired = connection.tokenExpiresAt ? connection.tokenExpiresAt <= new Date() : false;
+  if (expired && connection.status === "active") {
+    await getDb().update(instagramConnections).set({ status: "expired", updatedAt: new Date() }).where(eq(instagramConnections.id, connection.id));
+    connection.status = "expired";
+  }
+  return withRequestId(Response.json({ connection: { ...connection, reconnectRequired: connection.status !== "active" } }), id);
 }
 
 export async function DELETE(request: Request) {
