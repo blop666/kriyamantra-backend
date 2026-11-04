@@ -1,0 +1,19 @@
+name: Instagram scheduler
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run-scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process due Instagram schedules
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://kriyamantra-be.vercel.app/api/internal/scheduler" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "X-Request-ID: github-actions-${GITHUB_RUN_ID}"
