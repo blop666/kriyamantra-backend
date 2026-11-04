@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const conversationChannel = pgEnum("conversation_channel", ["web", "whatsapp"]);
 export const conversationState = pgEnum("conversation_state", ["collect_context", "ask_missing_data", "confirm_generation", "generating", "review_output", "revision", "approved"]);
@@ -9,6 +9,7 @@ export const qualityStatus = pgEnum("quality_status", ["draft", "approved"]);
 export const imageJobStatus = pgEnum("image_job_status", ["queued", "processing", "succeeded", "failed"]);
 export const integrationStatus = pgEnum("integration_status", ["active", "expired", "revoked", "error"]);
 export const publishStatus = pgEnum("publish_status", ["processing", "succeeded", "failed"]);
+export const scheduleStatus = pgEnum("schedule_status", ["scheduled", "processing", "cancelled", "published", "failed"]);
 
 export const businesses = pgTable("businesses", {
   id: uuid("id").primaryKey(),
@@ -130,3 +131,25 @@ export const auditEvents = pgTable("audit_events", {
   metadata: jsonb("metadata").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });
+
+export const instagramSchedules = pgTable("instagram_schedules", {
+  id: uuid("id").primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  generationId: uuid("generation_id").notNull().references(() => contentGenerations.id, { onDelete: "cascade" }),
+  mediaType: text("media_type").notNull(),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+  status: scheduleStatus("status").notNull(),
+  caption: text("caption").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+}, (table) => ({
+  businessIdempotencyUnique: uniqueIndex("instagram_schedules_business_idempotency_unique").on(table.businessId, table.idempotencyKey),
+  businessCreatedIndex: index("instagram_schedules_business_created_idx").on(table.businessId, table.createdAt),
+  dueIndex: index("instagram_schedules_due_idx").on(table.status, table.scheduledFor),
+  generationIndex: index("instagram_schedules_generation_idx").on(table.generationId),
+}));
