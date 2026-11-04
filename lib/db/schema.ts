@@ -118,3 +118,15 @@ export const instagramPublishJobs = pgTable("instagram_publish_jobs", {
 }, (table) => ({
   generationMediaTypeUnique: uniqueIndex("instagram_publish_jobs_generation_media_type_unique").on(table.generationId, table.mediaType),
 }));
+
+export const auditEvents = pgTable("audit_events", {
+  id: uuid("id").primaryKey(),
+  businessId: uuid("business_id").notNull(),
+  actorUserId: uuid("actor_user_id"),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  requestId: text("request_id").notNull(),
+  metadata: jsonb("metadata").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+});
