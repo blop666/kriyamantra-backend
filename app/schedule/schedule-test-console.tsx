@@ -38,7 +38,7 @@ export default function ScheduleTestConsole() {
   const [details, setDetails] = useState<Record<string, Detail>>({});
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [scheduledFor, setScheduledFor] = useState(() => localDateTime(10));
+  const [scheduledFor, setScheduledFor] = useState("");
   const [caption, setCaption] = useState("");
   const [mediaType, setMediaType] = useState<"FEED" | "STORIES">("FEED");
   const [status, setStatus] = useState<unknown>(null);
@@ -91,10 +91,18 @@ export default function ScheduleTestConsole() {
     await run("Approve", async () => { await call(`/api/content-generations/${selectedId}/approve`, { method: "POST", body: JSON.stringify({ confirmed: true }) }); await loadAll(); });
   }
 
+  function ensureScheduledTime() {
+    if (scheduledFor) return scheduledFor;
+    const value = localDateTime(10);
+    setScheduledFor(value);
+    return value;
+  }
+
   async function schedule() {
     if (!selectedId) return;
     await run("Schedule", async () => {
-      await call(`/api/posts/${selectedId}/schedule`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ scheduledFor: new Date(scheduledFor).toISOString(), mediaType, caption }) });
+      const value = ensureScheduledTime();
+      await call(`/api/posts/${selectedId}/schedule`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ scheduledFor: new Date(value).toISOString(), mediaType, caption }) });
       await loadAll();
     });
   }
