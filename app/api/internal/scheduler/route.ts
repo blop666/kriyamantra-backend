@@ -18,6 +18,8 @@ export async function POST(request: Request) {
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return withRequestId(Response.json({ error: "Unauthorized", requestId: requestIdValue }, { status: 401 }), requestIdValue);
   const db = getDb();
   const now = new Date();
+  const staleBefore = new Date(now.getTime() - 15 * 60_000);
+  await db.update(instagramSchedules).set({ status: "failed", lastError: "Scheduler execution timed out", attempts: MAX_SCHEDULE_RETRIES, updatedAt: now }).where(and(eq(instagramSchedules.status, "processing"), lte(instagramSchedules.updatedAt, staleBefore)));
   const candidates = await db.select({ id: instagramSchedules.id }).from(instagramSchedules).where(and(eq(instagramSchedules.status, "scheduled"), lte(instagramSchedules.scheduledFor, now))).limit(BATCH_SIZE);
   const results: Array<{ scheduleId: string; status: string }> = [];
   for (const candidate of candidates) {
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
       results.push({ scheduleId: schedule.id, status: "failed" });
     }
   }
-  return withRequestId(Response.json({ processed: results.length, results, requestId: requestIdValue }), requestIdValue);
+  return withRequestId(Response.json({ processed: results.length, results, checkedAt: now.toISOString(), requestId: requestIdValue }), requestIdValue);
 }
 
 export { POST as GET };

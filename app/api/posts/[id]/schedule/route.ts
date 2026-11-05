@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDb } from "@/lib/db/client";
-import { contentGenerations, contentOutputs, instagramConnections, instagramSchedules } from "@/lib/db/schema";
+import { contentGenerations, contentOutputs, instagramConnections, instagramPublishJobs, instagramSchedules } from "@/lib/db/schema";
 import { recordAudit } from "@/lib/audit";
 import { jsonError, readJson, requestId, withRequestId } from "@/lib/http";
 import { parseScheduleDate, validCaption, validMediaType } from "@/lib/schedule";
@@ -60,6 +60,8 @@ async function mutateSchedule(request: Request, params: { id: string }, update: 
     if (existing) return withRequestId(Response.json({ data: existing, requestId: requestIdValue }), requestIdValue);
     const [active] = await db.select({ id: instagramSchedules.id }).from(instagramSchedules).where(and(eq(instagramSchedules.businessId, business.id), eq(instagramSchedules.generationId, generationId), eq(instagramSchedules.mediaType, mediaType as string), eq(instagramSchedules.status, "scheduled"))).limit(1);
     if (active) return withRequestId(jsonError("Post already has a scheduled publish", 409, { scheduleId: active.id }, requestIdValue), requestIdValue);
+    const [published] = await db.select({ id: instagramPublishJobs.id }).from(instagramPublishJobs).where(and(eq(instagramPublishJobs.businessId, business.id), eq(instagramPublishJobs.generationId, generationId), eq(instagramPublishJobs.mediaType, mediaType as string), eq(instagramPublishJobs.status, "succeeded"))).limit(1);
+    if (published) return withRequestId(jsonError("This post was already published to Instagram", 409, { jobId: published.id }, requestIdValue), requestIdValue);
     const now = new Date();
     const [schedule] = await db.insert(instagramSchedules).values({ id: randomUUID(), businessId: business.id, generationId, mediaType: mediaType as string, scheduledFor, status: "scheduled", caption: caption ?? output.captionId, idempotencyKey, attempts: 0, createdAt: now, updatedAt: now }).onConflictDoNothing({ target: [instagramSchedules.businessId, instagramSchedules.idempotencyKey] }).returning();
     if (!schedule) {
