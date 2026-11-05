@@ -1,1 +1,1 @@
-export { GET as POST } from "../connect/route";
+export { GET, GET as POST } from "../connect/route";
