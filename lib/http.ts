@@ -17,6 +17,13 @@ export function jsonError(message: string, status: number, details?: unknown, id
   );
 }
 
+export function structuredError(code: string, message: string, status: number, details?: unknown, id?: string) {
+  return Response.json(
+    { error: { code, message, ...(details === undefined ? {} : { details }), ...(id ? { requestId: id } : {}) }, ...(id ? { requestId: id } : {}) },
+    { status },
+  );
+}
+
 export async function readJson(request: Request) {
   try {
     return await request.json();

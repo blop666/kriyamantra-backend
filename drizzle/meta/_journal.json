@@ -71,6 +71,41 @@
       "when": 1793762750589,
       "tag": "0009_furry_shocker",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793848650834,
+      "tag": "0010_orange_living_lightning",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793850964802,
+      "tag": "0011_cynical_pete_wisdom",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793851323998,
+      "tag": "0012_unusual_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793851773651,
+      "tag": "0013_heavy_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793853549474,
+      "tag": "0014_clammy_chronomancer",
+      "breakpoints": true
     }
   ]
 }
